@@ -1,0 +1,28 @@
+[user]
+	name = Kitty Makin
+	email = autumnull@posteo.net
+[diff "pdf"]
+	textconv = pdfinfo
+[pull]
+	rebase = true
+[alias]
+	tree = log --graph --decorate --pretty=oneline --abbrev-commit
+[init]
+	defaultBranch = main
+[push]
+	autoSetupRemote = true
+[sendemail]
+	smtpserver = posteo.de
+	smtpuser = autumnull@posteo.net
+	smtpencryption = ssl
+	smtpserverport = 465
+	confirm = auto
+	annotate = yes
+[format]
+	signOff = yes
+[rebase]
+	autosquash = true
+[advice]
+	skippedCherryPicks = false
+[credential "smtp://posteo.de:465"]
+	helper = libsecret

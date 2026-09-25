@@ -1,0 +1,23 @@
+## When soft line wrapping is enabled, make it wrap lines at blanks
+## (tabs and spaces) instead of always at the edge of the screen.
+set atblanks
+set autoindent
+## Do case-sensitive searches by default.
+set casesensitive
+## Constantly display the cursor position in the status bar or minibar.
+set constantshow
+## Display a "scrollbar" on the righthand side of the edit window.
+set indicator
+set linenumbers
+set mouse
+## Do regular-expression searches by default.
+## Regular expressions are of the extended type (ERE).
+set regexp
+set smarthome
+## Spread overlong lines over multiple screen lines.
+set softwrap
+set tabsize 4
+## Let an unmodified Backspace or Delete erase the marked region (instead
+## of a single character, and without affecting the cutbuffer).
+set zap
+set numbercolor white

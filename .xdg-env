@@ -1,0 +1,15 @@
+# Fixed bootstrap shared by .profile and user@1000.service.
+# EnvironmentFile= does not expand shell variables; use literal absolute paths.
+
+# https://wiki.archlinux.org/title/XDG_Base_Directory
+XDG_CACHE_HOME=/home/kitty/var/cache
+XDG_CONFIG_HOME=/home/kitty/etc
+XDG_DATA_HOME=/home/kitty/var/share
+XDG_LOG_HOME=/home/kitty/var/log
+XDG_STATE_HOME=/home/kitty/var/state
+
+# https://manpages.debian.org/buster/xdg-user-dirs/user-dirs.dirs.5.en.html
+XDG_DOWNLOAD_DIR=/home/kitty/tmp
+XDG_MUSIC_DIR=/home/kitty/usr/mus
+XDG_PICTURES_DIR=/home/kitty/usr/img
+XDG_VIDEOS_DIR=/home/kitty/usr/vid

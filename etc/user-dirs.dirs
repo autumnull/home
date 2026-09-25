@@ -1,0 +1,6 @@
+# Standard application folders in this home layout.
+XDG_DOWNLOAD_DIR="$HOME/tmp"
+XDG_MUSIC_DIR="$HOME/usr/mus"
+XDG_PICTURES_DIR="$HOME/usr/img"
+XDG_VIDEOS_DIR="$HOME/usr/vid"
+XDG_DESKTOP_DIR="$HOME/"

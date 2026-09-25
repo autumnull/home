@@ -1,0 +1,109 @@
+#!/bin/sh
+set -u
+
+warning_pid=
+sleep_pid=
+refresh=0
+warned=0
+tick=0
+wifi=
+quality=
+
+clear_warning() {
+    if [ -n "$warning_pid" ]; then
+        kill "$warning_pid" 2>/dev/null || :
+        wait "$warning_pid" 2>/dev/null || :
+        warning_pid=
+    fi
+}
+
+trap clear_warning EXIT
+trap 'exit 0' HUP INT TERM
+trap 'refresh=1; if [ -n "$sleep_pid" ]; then kill "$sleep_pid" 2>/dev/null || :; fi' USR1
+
+printf '{"version":1}\n[\n'
+
+while :; do
+    refresh=0
+    device=$(timeout 2 wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
+        awk '/^[[:space:]*]*node[.]description = "/ { sub(/^[^"]*"/, ""); sub(/"$/, ""); print; exit }')
+    volume=$(timeout 2 wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null |
+        awk '/^Volume:/ { if ($0 ~ /MUTED/) print "mute"; else printf "%.0f%%", $2 * 100 }')
+
+    ethernet='eth down'
+    for path in /sys/class/net/*; do
+        [ -d "$path/device" ] || continue
+        [ -d "$path/wireless" ] && continue
+        [ "$(cat "$path/type" 2>/dev/null)" = 1 ] || continue
+        if [ "$(cat "$path/carrier" 2>/dev/null)" = 1 ]; then
+            ethernet='eth up'
+            break
+        fi
+    done
+
+    if [ "$tick" -eq 0 ]; then
+        interface=$(awk 'NR > 2 { sub(/:$/, "", $1); print $1; exit }' /proc/net/wireless)
+        wifi=
+        quality=
+        if [ -n "$interface" ]; then
+            wifi=$(LC_ALL=C timeout 2 iwctl station "$interface" show 2>/dev/null |
+                awk '/Connected network/ { gsub(/\033\[[0-9;]*m/, ""); sub(/^.*Connected network[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }')
+            quality=$(awk -v interface="$interface:" '$1 == interface { printf "%.0f", $3 * 100 / 70 }' /proc/net/wireless)
+        fi
+    fi
+    tick=$(((tick + 1) % 10))
+
+    battery=
+    low=0
+    for path in /sys/class/power_supply/BAT*; do
+        [ -r "$path/capacity" ] || continue
+        capacity=$(cat "$path/capacity" 2>/dev/null)
+        case "$capacity" in ''|*[!0-9]*) continue ;; esac
+        state=$(cat "$path/status" 2>/dev/null)
+        battery="$capacity%"
+        case "$state" in
+            Charging) battery="$battery+" ;;
+            Discharging)
+                battery="$battery-"
+                if [ "$capacity" -le 10 ]; then low=1; fi
+                ;;
+        esac
+        break
+    done
+
+    if [ "$low" -eq 1 ]; then
+        if [ "$warned" -eq 0 ]; then
+            swaynag -t warning -m "low battery: $capacity%" \
+                --background 323232 --text ffffff --border 323232 \
+                --border-bottom 323232 --button-background 444444 \
+                --button-text ffffff >/dev/null 2>&1 &
+            warning_pid=$!
+            warned=1
+        fi
+    else
+        clear_warning
+        warned=0
+    fi
+
+    line=$(jq -cn \
+        --arg date "$(date +'%a %Y-%m-%d %H:%M:%S %p')" \
+        --arg device "${device:-audio}" --arg volume "$volume" \
+        --arg ethernet "$ethernet" --arg wifi "$wifi" \
+        --arg quality "$quality" --arg battery "$battery" '
+        [
+            (if $volume == "" then empty else
+                "<span foreground=\"#aaee22\">" + ($device | @html) + "</span> " + ($volume | @html) end),
+            ($ethernet | @html),
+            (if $wifi == "" then "<span foreground=\"#ff1133\">wifi down</span>" else
+                "<span foreground=\"#aaee22\">" + ($wifi | @html) + "</span>" +
+                (if $quality == "" then "" else " " + ($quality | @html) + "%" end) end),
+            ($date | @html),
+            ($battery | select(. != "") | @html)
+        ] | [{full_text: join(" | "), markup: "pango", separator: false, separator_block_width: 0}]') || exit
+    printf '%s,\n' "$line" || exit
+    sleep 1 &
+    sleep_pid=$!
+    if [ "$refresh" -eq 1 ]; then kill "$sleep_pid" 2>/dev/null || :; fi
+    wait "$sleep_pid" 2>/dev/null || :
+    sleep_pid=
+done

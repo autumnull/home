@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    sink) device=@DEFAULT_AUDIO_SINK@; indicator=platform::mute ;;
+    source) device=@DEFAULT_AUDIO_SOURCE@; indicator=platform::micmute ;;
+    *) printf 'usage: sway-mute sink|source\n' >&2; exit 2 ;;
+esac
+wpctl set-mute "$device" toggle
+pkill -USR1 -u "$(id -u)" -f '^(/bin/sh|/usr/bin/sh) .*/bin/sway-status$' || :
+if [ -d "/sys/class/leds/$indicator" ] && command -v brightnessctl >/dev/null 2>&1; then
+    level=0
+    if wpctl get-volume "$device" | grep -q '\[MUTED\]'; then level=1; fi
+    brightnessctl -q -d "$indicator" set "$level"
+fi

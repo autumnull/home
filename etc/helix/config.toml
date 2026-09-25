@@ -1,0 +1,73 @@
+theme = "base16_terminal"
+
+[editor.soft-wrap]
+enable = true
+
+[keys.normal] # normal mode
+t = "move_line_down"
+n = "move_line_up"
+s = "move_char_right"
+# together
+T = "join_selections"
+A-T = "join_selections_space"
+# jump
+j = "find_till_char"
+J = "till_prev_char"
+# selektion
+k = "select_regex"
+K = "split_selection"
+A-k = "split_selection_on_newline"
+# look
+l = "search_next"
+L = "search_prev"
+A-l = "select_next_sibling"
+
+[keys.normal.z] # view mode
+t = "scroll_down"
+n = "scroll_up"
+# haut/bas
+h = "align_view_top"
+
+[keys.normal.g] # goto mode
+s = "goto_line_end"
+w = "goto_first_nonwhitespace"
+
+[keys.normal.C-w] # window mode
+t = "jump_view_down"
+C-t = "jump_view_down"
+n = "jump_view_up"
+C-n = "jump_view_up"
+s = "jump_view_right"
+C-s = "jump_view_right"
+T = "swap_view_down"
+N = "swap_view_up"
+S = "swap_view_right"
+# horiZontal
+z = "hsplit"
+C-z = "hsplit"
+j = "no_op"
+J = "no_op"
+C-j = "no_op"
+k = "no_op"
+K = "no_op"
+C-k = "no_op"
+l = "no_op"
+L = "no_op"
+C-l = "no_op"
+
+[keys.select] # select mode
+t = "extend_line_down"
+n = "extend_line_up"
+s = "extend_char_right"
+S = "keep_selections"
+A-S = "remove_selections"
+j = "extend_till_char"
+J = "extend_till_prev_char"
+k = "select_regex"
+K = "split_selection"
+A-k = "split_selection_on_newline"
+l = "extend_search_next"
+L = "extend_search_prev"
+
+[keys.select.g]
+s = "extend_to_line_end"

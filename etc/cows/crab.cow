@@ -1,0 +1,13 @@
+$o = "\e[38;5;203m";
+$r = "\e[0m";
+$el = substr($eyes, 0, 1);
+$er = substr($eyes, 1, 2);
+$t = substr($tongue, 0, 1);
+$t = ($t eq " " ? "^" : $t);
+$the_cow = <<"EOC";
+       $thoughts
+        $thoughts $o,___,
+     \\)__/ $r$el $er$o \\__(/
+       _/\\/_${t}_\\/\\_
+        _/     \\_$r
+EOC

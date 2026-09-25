@@ -1,0 +1,50 @@
+# Don't print a new line at the start of the prompt
+add_newline = false
+format = """
+$username\
+$hostname\
+$directory\
+$shlvl\
+$git_branch\
+$git_commit\
+$git_state\
+$cmd_duration\
+$line_break\
+$jobs\
+$character"""
+
+[username]
+style_user = 'green bold'
+style_root = 'red bold'
+format = '[\[$user]($style)'
+show_always = true
+
+[hostname]
+ssh_only = false
+format =  '[@$hostname](green bold) '
+disabled = false
+
+[directory]
+format = '[$path]($style)[\]](green bold) '
+style = ''
+
+[shlvl]
+disabled = false
+format = '[$shlvl](yellow) '
+threshold = 2
+
+[git_branch]
+format = '[on](243) [* $branch]($style) '
+style = 'red bold'
+
+[git_commit]
+format = '[$hash]($style)'
+style = 'yellow'
+
+[cmd_duration]
+min_time = 500
+format = "[took](243) [$duration]($style)"
+
+[character]
+success_symbol = '[x>](green)'
+error_symbol = '[<x](red)'

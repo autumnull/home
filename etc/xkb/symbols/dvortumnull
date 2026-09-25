@@ -1,0 +1,48 @@
+partial alphanumeric_keys
+xkb_symbols "basic" {
+	include "gb(dvorak)"
+	include "compose(rctrl)"
+	include "capslock(swapescape)"
+
+	name[Group1]="Kitty's multi-purpose Dvorak!";
+
+	// Row 1
+	key <TLDE> {[ 0             , notsign       ]};
+	key <AE01> {[ 1             , grave         ]};
+	key <AE02> {[ 2             , numbersign    ]};
+	key <AE03> {[ 3             , asciitilde    ]};
+	key <AE04> {[ 4             , dollar        ]};
+	key <AE05> {[ 5             , bar           ]};
+	key <AE06> {[ 6             , sterling      ]};
+	key <AE07> {[ 7             , at            ]};
+	key <AE08> {[ 8             , asciicircum   ]};
+	key <AE09> {[ 9             , percent       ]};
+	key <AE10> {[ asterisk      , ampersand     ]};
+	key <AE11> {[ less          , greater       ]};
+	key <AE12> {[ bracketleft   , bracketright  ]};
+
+	// Row 2
+	key <AD01> {[ apostrophe    , quotedbl      ]};
+	key <AD02> {[ comma         , question      ]};
+	key <AD03> {[ period        , exclam        ]};
+
+	key <AD11> {[ minus         , plus          ]};
+	key <AD12> {[ braceleft     , braceright    ]};
+
+	// Row 3
+	key <AC01> {[a              , A            , 0]};
+	key <AC02> {[o              , O            , 1]};
+	key <AC03> {[e              , E            , 2]};
+	key <AC04> {[u              , U            , 3]};
+	key <AC05> {[i              , I            , 4]};
+	key <AC06> {[d              , D            , 5]};
+	key <AC07> {[h              , H            , 6]};
+	key <AC08> {[t              , T            , 7]};
+	key <AC09> {[n              , N            , 8]};
+	key <AC10> {[s              , S            , 9]};
+	key <AC11> {[ equal         , underscore    ]};
+	key <BKSL> {[ parenleft     , parenright    ]};
+
+	// Row 4
+	key <LSGT> {[ slash         , backslash     ]};
+};
