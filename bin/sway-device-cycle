@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+case "${1:-}" in
+    sink) class=Audio/Sink; device=@DEFAULT_AUDIO_SINK@ ;;
+    source) class=Audio/Source; device=@DEFAULT_AUDIO_SOURCE@ ;;
+    *) printf 'usage: sway-device-cycle sink|source\n' >&2; exit 2 ;;
+esac
+current=$(wpctl inspect "$device" | sed -n '1s/^id \([0-9]*\),.*/\1/p')
+next=$(pw-dump | jq -r --arg class "$class" --arg current "$current" '
+    [.[] | select(.type == "PipeWire:Interface:Node" and .info.props["media.class"] == $class) | .id] | sort
+    | (index($current | tonumber) // -1) as $i | .[($i + 1) % length]')
+wpctl set-default "$next"
+pkill -USR1 -u "$(id -u)" -f '^(/bin/sh|/usr/bin/sh) .*/bin/sway-status$' || :

@@ -3,6 +3,7 @@
 !/.profile
 !/.xdg-env
 !/bin/
+!/bin/sway-device-cycle
 !/bin/sway-mute
 !/bin/sway-status
 !/etc/
