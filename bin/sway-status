@@ -1,5 +1,6 @@
 #!/bin/sh
 set -u
+export LC_ALL=C
 
 warning_pid=
 sleep_pid=
@@ -7,7 +8,57 @@ refresh=0
 warned=0
 tick=0
 wifi=
-quality=
+wifi_previous_interface=
+case $(uname -n) in
+    eros) peer=psyche peer_address=10.77.1.2 ;;
+    psyche) peer=eros peer_address=10.77.1.1 ;;
+esac
+peer_status=
+easytier_next=0
+easytier_previous=
+
+read_value() {
+    value=
+    IFS= read -r value 2>/dev/null < "$1" || :
+    printf '%s' "$value"
+}
+
+easytier_status() {
+    peer_route=$(timeout 1 easytier-cli -v peer 2>/dev/null | jq -er --arg host "$peer" '
+        def hex8:
+            . as $n | [range(7;-1;-1) as $i |
+                (($n / pow(16; $i) | floor) % 16) as $d |
+                "0123456789abcdef"[$d:$d + 1]] | join("");
+        . as $peers |
+        first(.[] | select(.route.hostname == $host)).route as $route |
+        first($peers[] | select(.route.peer_id == $route.next_hop_peer_id)).peer as $peer |
+        ([$peer.default_conn_id | .part1, .part2, .part3, .part4] |
+            map(. // 0 | hex8) | join("")) as $selected |
+        ($peer.conns | map(select(.is_closed != true))) as $connections |
+        (($connections | map(select((.conn_id | gsub("-"; "")) == $selected)) | first) //
+            ($connections | min_by(.stats.latency_us))) as $connection |
+        ($connection.tunnel.resolved_remote_addr.url // empty |
+            sub("^[^:]+://"; "") | sub(":[0-9]+$"; "") |
+            ltrimstr("[") | rtrimstr("]")) as $endpoint |
+        "\($route.cost) \($endpoint)"' 2>/dev/null) || return
+    hops=${peer_route%% *}
+    endpoint=${peer_route#* }
+    route=$(timeout 1 ip -j route get "$endpoint" 2>/dev/null |
+        jq -er '.[0] | select(.dev) | .dev + " " + (.gateway // "")' 2>/dev/null)
+    interface=${route%% *}
+    gateway=${route#* }
+    connection=unknown
+    if [ -n "$route" ]; then
+        if [ -n "$gateway" ]; then connection=internet
+        elif [ -d "/sys/class/net/$interface/wireless" ]; then connection="wifi LAN"
+        elif [ "$(read_value "/sys/class/net/$interface/type")" = 1 ]; then connection=ethernet
+        else connection=LAN
+        fi
+    fi
+    plural=s
+    [ "$hops" = 1 ] && plural=
+    printf '%s · %s hop%s' "$connection" "$hops" "$plural"
+}
 
 clear_warning() {
     if [ -n "$warning_pid" ]; then
@@ -28,52 +79,96 @@ while :; do
     device=$(timeout 2 wpctl inspect @DEFAULT_AUDIO_SINK@ 2>/dev/null |
         awk '/^[[:space:]*]*node[.]description = "/ { sub(/^[^"]*"/, ""); sub(/"$/, ""); print; exit }')
     volume=$(timeout 2 wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null |
-        awk '/^Volume:/ { if ($0 ~ /MUTED/) print "mute"; else printf "%.0f%%", $2 * 100 }')
+        awk '/^Volume: [0-9]+([.][0-9]+)?/ { if ($0 ~ /MUTED/) print "mute"; else printf "%.0f", $2 * 100 }')
 
-    ethernet='eth down'
+    ethernet=
     for path in /sys/class/net/*; do
         [ -d "$path/device" ] || continue
         [ -d "$path/wireless" ] && continue
-        [ "$(cat "$path/type" 2>/dev/null)" = 1 ] || continue
-        if [ "$(cat "$path/carrier" 2>/dev/null)" = 1 ]; then
-            ethernet='eth up'
-            break
-        fi
+        [ "$(read_value "$path/type")" = 1 ] || continue
+        [ "$(read_value "$path/carrier")" = 1 ] || continue
+        for family in -4 -6; do
+            ethernet=$(timeout 2 ip -j "$family" route show default dev "${path##*/}" 2>/dev/null |
+                jq -r 'map(select(.gateway)) | min_by(.metric // 0) | .gateway // empty' 2>/dev/null)
+            [ -n "$ethernet" ] && break
+        done
+        ethernet=${ethernet:-connected}
+        break
     done
 
-    if [ "$tick" -eq 0 ]; then
-        interface=$(awk 'NR > 2 { sub(/:$/, "", $1); print $1; exit }' /proc/net/wireless)
-        wifi=
+    wifi_reading=$(awk 'NR > 2 { sub(/:$/, "", $1); printf "%s %.0f", $1, $3 * 100 / 70; exit }' /proc/net/wireless 2>/dev/null)
+    wifi_interface=${wifi_reading%% *}
+    quality=${wifi_reading#* }
+    if [ -n "$wifi_interface" ] && [ "$(read_value "/sys/class/net/$wifi_interface/carrier")" != 1 ]; then
+        wifi_interface=
         quality=
-        if [ -n "$interface" ]; then
-            wifi=$(LC_ALL=C timeout 2 iwctl station "$interface" show 2>/dev/null |
-                awk '/Connected network/ { gsub(/\033\[[0-9;]*m/, ""); sub(/^.*Connected network[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }')
-            quality=$(awk -v interface="$interface:" '$1 == interface { printf "%.0f", $3 * 100 / 70 }' /proc/net/wireless)
-        fi
     fi
-    tick=$(((tick + 1) % 10))
+    if [ -z "$wifi_interface" ]; then
+        wifi=
+    elif [ "$wifi_interface" != "$wifi_previous_interface" ] || [ "$tick" -eq 0 ]; then
+        wifi=$(timeout 2 iwctl station "$wifi_interface" show 2>/dev/null |
+            awk '/Connected network/ { gsub(/\033\[[0-9;]*m/, ""); sub(/^.*Connected network[[:space:]]+/, ""); sub(/[[:space:]]+$/, ""); print; exit }')
+    fi
+    wifi_previous_interface=$wifi_interface
 
+    read -r easytier_now easytier_idle < /proc/uptime
+    easytier_tick=${easytier_now%%.*}
+    if [ "$easytier_tick" -ge "$easytier_next" ]; then
+        peer_status=$(easytier_status)
+        easytier_speed='DN ---.- ---- UP ---.- ----'
+        if [ -n "$peer_status" ] &&
+            easytier_interface=$(timeout 1 ip -j route get "$peer_address" 2>/dev/null |
+                jq -er '.[0].dev // empty' 2>/dev/null) &&
+            [ -r "/sys/class/net/$easytier_interface/tun_flags" ] &&
+            read -r easytier_index 2>/dev/null < "/sys/class/net/$easytier_interface/ifindex" &&
+            read -r easytier_rx 2>/dev/null < "/sys/class/net/$easytier_interface/statistics/rx_bytes" &&
+            read -r easytier_tx 2>/dev/null < "/sys/class/net/$easytier_interface/statistics/tx_bytes"; then
+            read -r easytier_now easytier_idle < /proc/uptime
+            easytier_sample="$easytier_now $easytier_index $easytier_rx $easytier_tx"
+            easytier_speed=$(printf '%s\n%s\n' "$easytier_previous" "$easytier_sample" |
+                LC_ALL=C awk '
+                function rate(n, unit) {
+                    unit="B/s"
+                    if (n >= 999.95) { n/=1000; unit="kB/s" }
+                    if (n >= 999.95) { n/=1000; unit="MB/s" }
+                    if (n >= 999.95) { n/=1000; unit="GB/s" }
+                    return sprintf("%05.1f %4s", n, unit)
+                }
+                NR == 1 { t=$1; id=$2; rx=$3; tx=$4; next }
+                {
+                    dt=$1-t
+                    if ($2 != id || dt <= 0 || $3 < rx || $4 < tx) print "DN ---.- ---- UP ---.- ----"
+                    else printf "DN %s UP %s", rate(($3-rx)/dt), rate(($4-tx)/dt)
+                }')
+            easytier_previous=$easytier_sample
+        else
+            easytier_previous=
+        fi
+        [ -z "$peer_status" ] || peer_status="$peer_status · $easytier_speed"
+        easytier_next=$((easytier_tick + 5))
+    fi
+
+    mains=$(read_value /sys/class/power_supply/AC/online)
     battery=
+    battery_name=
     low=0
     for path in /sys/class/power_supply/BAT*; do
-        [ -r "$path/capacity" ] || continue
-        capacity=$(cat "$path/capacity" 2>/dev/null)
+        [ -d "$path" ] || continue
+        [ "$(read_value "$path/present")" = 0 ] && continue
+        battery_name=${path##*/}
+        capacity=$(read_value "$path/capacity")
         case "$capacity" in ''|*[!0-9]*) continue ;; esac
-        state=$(cat "$path/status" 2>/dev/null)
-        battery="$capacity%"
-        case "$state" in
-            Charging) battery="$battery+" ;;
-            Discharging)
-                battery="$battery-"
-                if [ "$capacity" -le 10 ]; then low=1; fi
-                ;;
-        esac
+        [ "$capacity" -le 100 ] 2>/dev/null || continue
+        battery=$capacity
+        if [ "$(read_value "$path/status")" = Discharging ] && [ "$capacity" -le 10 ]; then
+            low=1
+        fi
         break
     done
 
     if [ "$low" -eq 1 ]; then
         if [ "$warned" -eq 0 ]; then
-            swaynag -t warning -m "low battery: $capacity%" \
+            swaynag -t warning -m "low battery: $battery%" \
                 --background 323232 --text ffffff --border 323232 \
                 --border-bottom 323232 --button-background 444444 \
                 --button-text ffffff >/dev/null 2>&1 &
@@ -88,19 +183,30 @@ while :; do
     line=$(jq -cn \
         --arg date "$(date +'%a %Y-%m-%d %H:%M:%S %p')" \
         --arg device "${device:-audio}" --arg volume "$volume" \
-        --arg ethernet "$ethernet" --arg wifi "$wifi" \
-        --arg quality "$quality" --arg battery "$battery" '
+        --arg ethernet "$ethernet" --arg wifi "$wifi" --arg quality "$quality" \
+        --arg peer "$peer" --arg peer_status "$peer_status" \
+        --arg battery "$battery" --arg battery_name "$battery_name" --arg mains "$mains" '
+        def colour($c): "<span foreground=\"" + $c + "\">" + @html + "</span>";
+        def blue: colour("#55aaff");
+        def red: colour("#ff1133");
+        def labelled($name; $value): ($name | blue) + " " + ($value | @html);
         [
-            (if $volume == "" then empty else
-                "<span foreground=\"#aaee22\">" + ($device | @html) + "</span> " + ($volume | @html) end),
-            ($ethernet | @html),
-            (if $wifi == "" then "<span foreground=\"#ff1133\">wifi down</span>" else
-                "<span foreground=\"#aaee22\">" + ($wifi | @html) + "</span>" +
-                (if $quality == "" then "" else " " + ($quality | @html) + "%" end) end),
+            (if $peer_status == "" then "\($peer) down" | red else labelled($peer; $peer_status) end),
+            (if $wifi == "" then "wifi down" | red else
+                ($wifi | blue) + (if $quality == "" then "" else " " + $quality + "%" end) end),
+            (if $ethernet == "" then "eth down" | red else labelled("eth"; $ethernet) end),
+            (if $volume == "" then "audio down" | red else
+                labelled($device; if $volume == "mute" then $volume else $volume + "%" end) end),
             ($date | @html),
-            ($battery | select(. != "") | @html)
-        ] | [{full_text: join(" | "), markup: "pango", separator: false, separator_block_width: 0}]') || exit
+            (if $battery == "" then
+                (if $battery_name == "" then "no battery" else "battery unavailable" end) | red
+             else labelled($battery_name; $battery + "%") end),
+            (if $mains == "1" then labelled("AC"; "on")
+             elif $mains == "0" then "AC off" | red
+             else "AC unavailable" | red end)
+        ] | [{full_text: join(" · "), markup: "pango", separator: false, separator_block_width: 0}]') || exit
     printf '%s,\n' "$line" || exit
+    tick=$(((tick + 1) % 10))
     sleep 1 &
     sleep_pid=$!
     if [ "$refresh" -eq 1 ]; then kill "$sleep_pid" 2>/dev/null || :; fi
