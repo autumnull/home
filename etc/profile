@@ -1,4 +1,5 @@
 export CARGO_HOME=$XDG_DATA_HOME/cargo
+export CLAUDE_CONFIG_DIR=$XDG_CONFIG_HOME/claude
 export CODEX_HOME=$XDG_CONFIG_HOME/codex
 export COWPATH=$XDG_CONFIG_HOME/cows:/usr/share/cows
 export ELECTRUMDIR=$XDG_DATA_HOME/electrum

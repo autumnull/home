@@ -21,12 +21,10 @@
 !/etc/profile
 !/etc/user-dirs.conf
 !/etc/user-dirs.dirs
+!/etc/agents/
+!/etc/agents/AGENTS.md
 !/etc/codex/
-!/etc/codex/AGENTS.md
 !/etc/codex/home.config.toml
-!/etc/codex/skills/
-!/etc/codex/skills/work-on-projects/
-!/etc/codex/skills/work-on-projects/SKILL.md
 !/etc/codex/themes/
 !/etc/codex/themes/base16-terminal.tmTheme
 !/etc/fish/conf.d/
